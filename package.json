@@ -1,0 +1,10 @@
+{
+  "devDependencies": {
+    "ethers": "^5.7.2",
+    "@openzeppelin/contracts": "^4.8.1"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "^4.8.1",
+    "dotenv": "^16.0.3"
+  }
+}
