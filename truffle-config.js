@@ -17,6 +17,11 @@ module.exports = {
       accounts: [process.env.PRIVATE_KEY],
       network_id: "*",
     },
+    mantle_testnet: {
+      url: "https://rpc.testnet.mantle.xyz/",
+      accounts: [process.env.PRIVATE_KEY],
+      network_id: "*",
+    },
   },
 
   // Set default mocha options here, use special reporters, etc.

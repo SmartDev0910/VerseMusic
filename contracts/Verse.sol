@@ -8,4 +8,8 @@ contract Verse {
     function addMinter() public {
         
     }
+    
+    function updateMinter() public {
+        
+    }
 }
