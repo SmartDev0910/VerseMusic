@@ -1,7 +1,15 @@
-artifacts/
-cache/
-node_modules/
-build/
+hardhat/artifacts/
+hardhat/cache/
+hardhat/node_modules/
+hardhat/build/
 
-.env
-package-lock.json
+hardhat/.env
+hardhat/package-lock.json
+
+truffle/artifacts/
+truffle/cache/
+truffle/node_modules/
+truffle/build/
+
+truffle/.env
+truffle/package-lock.json
