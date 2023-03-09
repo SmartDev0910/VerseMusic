@@ -5,10 +5,10 @@ async function main() {
 
   console.log("Account balance:", (await deployer.getBalance()).toString());
 
-  const Verse = await ethers.getContractFactory("Verse");
-  const verse = await Verse.deploy();
+  const VerseMusic = await ethers.getContractFactory("VerseMusic");
+  const verseMusic = await VerseMusic.deploy();
 
-  console.log("Verse address:", verse.address);
+  console.log("VerseMusic address:", verseMusic.address);
 }
 
 main()
