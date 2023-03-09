@@ -15,12 +15,12 @@ module.exports = {
     bsc_testnet: {
       url: "https://data-seed-prebsc-1-s1.binance.org:8545",
       accounts: [process.env.PRIVATE_KEY],
-      network_id: "*",
+      network_id: 97,
     },
     mantle_testnet: {
       url: "https://rpc.testnet.mantle.xyz/",
       accounts: [process.env.PRIVATE_KEY],
-      network_id: "*",
+      network_id: 5001,
     },
   },
 
