@@ -1,128 +1,120 @@
 // SPDX-License-Identifier: MIT
+
+/**
+ * Author: Lawrence Onah <paplow01@gmail.com>
+ * Github: https://github.com/kodjunkie
+ */
+
 pragma solidity ^0.8.9;
 
-import "@openzeppelin/contracts-upgradeable/token/ERC1155/ERC1155Upgradeable.sol";
-// import "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
-import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/utils/cryptography/MerkleProofUpgradeable.sol";
+import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+import "@openzeppelin/contracts/utils/Counters.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 
-contract VerseMusic is ERC1155Upgradeable, ReentrancyGuardUpgradeable {
-    address public owner;
+contract VerseMusic is ERC721, Ownable {
+	using Strings for uint256;
+	using Counters for Counters.Counter;
 
-    bool public mintNFTPaused;
-    bool public burnNFTPaused;
+	Counters.Counter private _supply;
 
-    uint256 private constant nftSeriesId = 1;
-    uint256 private availableNFTsForMint; // counter for remaining nfts to be minted
-    uint256 private availableNFTsForReward; // counter for nfts waiting for reward
+	string private baseURI;
+	string private baseExt = ".json";
 
-    uint256 private totalRewardSeries;
-    uint256 private currentRewardSeriesId;
-    mapping(uint256 => uint256) private rewardSupplies; // reward series Id to reward supplies
-    mapping(uint256 => string) private tokenURI; // reward series Id to reward token URI
+	// Total supply
+	uint256 public constant MAX_SUPPLY = 41;
 
-    bytes32 private validKeysMerkleRoot;
-    uint256 private currentMerkleRound;
-    mapping(uint256 => mapping(string => bool)) private keyUsed;
+	// Public mint constants
+	bool public saleActive = false;
+	uint256 private constant MAX_PER_WALLET = 3; // 2/wallet (uses < to save gas)
+	uint256 private constant MINT_PRICE = 0.3 ether;
 
-    /* one PFP can mint a nft per each level in each series */
-    /* the order of below mapping variable is : series Id ==> collection Id ==> token Id ==> level ==> minted flag */
-    // mapping(uint256 => mapping(uint256 => mapping(uint256 => mapping(uint256 => bool)))) private alreadyMinted;
+	bool private _locked = false; // for re-entrancy guard
 
-    modifier onlyOwner() {
-        require(owner == msg.sender, "Ownable: caller is not the owner");
-        _;
-    }
+	// Initializes the contract by setting a `name` and a `symbol`
+	constructor() ERC721("VERSEMUSIC", "VERSE") {
+		_supply.increment();
+		setBaseURI("https://game.example/item-id-8u5h2m.json");
+	}
 
-    modifier isValidMerkleProof(bytes32[] calldata merkleProof, bytes32 root, string memory leaf) {
-        require(
-            MerkleProofUpgradeable.verify(
-                merkleProof,
-                root,
-                keccak256(abi.encodePacked(leaf))
-            ),
-            "This key does not exist in list"
-        );
-        _;
-    }
+	// constructor(string memory _initBaseURI) ERC721("VERSEMUSIC", "VERSE") {
+	// 	_supply.increment();
+	// 	setBaseURI(_initBaseURI);
+	// }
 
-    function __ERC1155WithMetadata_init(string memory uri_)
-        internal
-        initializer
-    {
-        __ERC1155_init_unchained(uri_);
-        owner = msg.sender;
-        currentRewardSeriesId = 1;
-    }
+	// Mint an NFT
+	function mint(uint256 _quantity) external payable nonReentrant {
+		require(saleActive, "Sale is closed at the moment.");
 
-    function setValidKeysMerkleRoot(bytes32 merkleRoot) external onlyOwner {
-        validKeysMerkleRoot = merkleRoot;
-        currentMerkleRound ++;
-    }
+		address _to = msg.sender;
+		require(_quantity > 0 && (balanceOf(_to) + _quantity) < MAX_PER_WALLET, "Invalid mint quantity.");
+		require(msg.value >= (MINT_PRICE * _quantity), "Not enough ETH.");
 
-    function pauseMintNFT(bool pause) external onlyOwner {
-        mintNFTPaused = pause;
-    }
+		_mintLoop(_to, _quantity);
+	}
 
-    function pauseBurnNFT(bool pause) external onlyOwner {
-        burnNFTPaused = pause;
-    }
+	// Itrative mint handler
+	function _mintLoop(address _to, uint256 _quantity) private {
+		/**
+		 * To save gas, since we know _quantity won't overflow
+		 * Checks are performed in caller functions / methods
+		 */
+		unchecked {
+			require((_quantity + _supply.current()) <= MAX_SUPPLY, "Max supply exceeded.");
 
-    function createNewNFTSupply(uint256 supply) external onlyOwner {
-        availableNFTsForMint += supply;
-        availableNFTsForReward += supply;
-    }
+			for (uint256 i = 0; i < _quantity; ++i) {
+				_safeMint(_to, _supply.current());
+				_supply.increment();
+			}
+		}
+	}
 
-    function createNewRewardSupply(uint256 supply, string memory _tokenUri) external onlyOwner {
-        require(availableNFTsForReward >= supply, "exceeds available reward supply, please add more nft");
+	// Toggle sale state
+	function toggleSaleState() public onlyOwner {
+		saleActive = !saleActive;
+	}
 
-        availableNFTsForReward -= supply;
-        totalRewardSeries ++;
-        tokenURI[totalRewardSeries + nftSeriesId] = _tokenUri;
-        rewardSupplies[totalRewardSeries + nftSeriesId] = supply;
-    }
+	// Get total supply
+	function totalSupply() public view returns (uint256) {
+		return _supply.current() - 1;
+	}
 
-    // only game should be able to call this function
-    function mintNFT(bytes32[] calldata merkleProof, string memory myKey) external payable isValidMerkleProof(merkleProof, validKeysMerkleRoot, myKey) nonReentrant {
-        require(!mintNFTPaused, "nft minting is paused");
-        require(!keyUsed[currentMerkleRound][myKey], "This key is already used");
-        // require(!alreadyMinted[currentSeriesId][collectionId][tokenId][level], "already minted a nft in this level with this PFP for this series");
-        require(availableNFTsForMint > 0, "all nfts are minted already");
-        _mint(msg.sender, nftSeriesId, 1, "0x00");
-        availableNFTsForMint --;
-        keyUsed[currentMerkleRound][myKey] = true;
-        // alreadyMinted[currentSeriesId][collectionId][tokenId][level] = true;
-    }
+	// Base URI
+	function _baseURI() internal view virtual override returns (string memory) {
+		return baseURI;
+	}
 
-    function mintRewardBurnNFT() external payable nonReentrant {
-        require(!burnNFTPaused, "nft burning is paused");
-        require(balanceOf(msg.sender, nftSeriesId) > 0, "You don't own any nft");
+	// Set base URI
+	function setBaseURI(string memory _newBaseURI) public {
+		baseURI = _newBaseURI;
+	}
 
-        if (rewardSupplies[currentRewardSeriesId] <= 0) {
-            require(rewardSupplies[currentRewardSeriesId + 1] > 0, "reward nft not ready yet");
-            currentRewardSeriesId ++;
-        }
-        rewardSupplies[currentRewardSeriesId] -= 1;
-        _burn(msg.sender, nftSeriesId, 1);
-        _mint(msg.sender, currentRewardSeriesId, 1, "0x00");
-    }
+	// Get metadata URI
+	function tokenURI(uint256 tokenId) public view virtual override returns (string memory) {
+		require(_exists(tokenId), "ERC721Metadata: URI query for nonexistent token.");
 
-    function setNFTUri(string memory nftUri) external onlyOwner {
-        tokenURI[nftSeriesId] = nftUri;
-    }
+		string memory currentBaseURI = _baseURI();
+		return
+			bytes(currentBaseURI).length > 0
+				? string(abi.encodePacked(currentBaseURI, tokenId.toString(), baseExt))
+				: "";
+	}
 
-    function uri(uint256 tokenId) override public view returns (string memory tokenUri) {
-        tokenUri = tokenURI[tokenId];
-    }
+	// Withdraw balance
+	function withdraw() external onlyOwner {
+		// Transfer the remaining balance to the owner
+		// Do not remove this line, else you won't be able to withdraw the funds
+		(bool sent, ) = payable(owner()).call{ value: address(this).balance }("");
+		require(sent, "Failed to withdraw Ether.");
+	}
 
-    function transferOwnership(address newOwner) public onlyOwner {
-        require(newOwner != address(0));
-        owner = newOwner;
-    }
+	// Receive any funds sent to the contract
+	receive() external payable {}
 
-    function withdraw() external onlyOwner {
-        uint256 balance = address(this).balance;
-
-        payable(msg.sender).transfer(balance);
-    }
+	// Reentrancy guard modifier
+	modifier nonReentrant() {
+		require(!_locked, "No re-entrant call.");
+		_locked = true;
+		_;
+		_locked = false;
+	}
 }
